@@ -1,14 +1,14 @@
-# Mean is supposedly following a special distribution no matter how wired the backgound distribution is.
-# Let's check it. 
 
-## Creating a wired back ground ppopulation 
+# Mean of samples supposedly follows a special distribution no matter how wired the backgound distribution is.
+## Creating a wired back ground population 
 x = runif(2000, 20, 80)
-head(x)
+head(x, n=10)
 hist(x)
 mean(x) # mean of the destribution
 x = ifelse(x>50, x+10, x-10) 
-head(x)
+head(x, n=10)
 hist(x) 
+mean(x) # mean of the destribution
 
 # sample 10 from background destribution and take the mean
 x10 = sample(x, 10)
@@ -67,6 +67,7 @@ for (i in 1:20000){
   x40_means = c(x40_means, x40_mean)
 }
 length(x40_means)
+head(x40_means, n=10)
 par(new=T)
 hist(x40_means, breaks = 50, xlim = c(20, 80), ylim=c(0,0.1), prob=T, col="red", density=50)
 # This distribution approx,
@@ -96,29 +97,32 @@ sqrt(sum((a-mean(a))^2)/4) # standard deviation
 
 
 # Back to the origial problem
-# Can we use CLT to judge whether x10_mean is different from 50
 sample=c(52, 56, 48, 52, 56, 54, 49, 42, 56, 57)
 mean_10 = mean(sample)
-## Supppose x10_means follows N(mu, sigma^2) where mu=50, 
+
+# Can we use CLT to judge whether x10_mean is different from 50
+## Supppose x10_means follows N(mu, sigma^2/sqrt(10)) where mu=50, 
 ## (null hypothesis:H0), we can tell how likely we would get
 ## x10_mean (obs) or more extreme. 
 ## The problem: how can we find sigma?
 ## We substitute sigma by sd(sample), but sd(sample) is always,
-## a bit smaller than sd(x), so need correction -> t distribution
+## a bit smaller than sd(x), so need to be corrected -> t distribution
 curve(dnorm(x, mean=0, sd=1), xlim=c(-3,3))
 curve(dt(x, df=3),col="red", add=T)
+# When t is large enough, it's almost the same as a normal distribution
 curve(dt(x, df=30),col="blue", add=T)
 
 
 
 
-
 ## The t-distribution of x10_mean under the null hypothesis
-## (x-50)/{sd(sample)/sqrt(9) follows t-dist with df of 9
+## (x-50)/{sd(sample)/sqrt(10) follows t-dist with df of 9
 curve(dt((x-50)/{sd(sample)/sqrt(10)}, df=9),col="red", xlim=c(45, 55)) 
 abline(v=mean_10)
-pt((mean_10-50)/{sd(sample)/sqrt(10)}, df=9, lower.tail = F) *2
-t.test(sample-50)
+T_statistic = (mean_10-50)/{sd(sample)/sqrt(10)}
+pt(T_statistic, df=9, lower.tail = F) # one-way
+pt(T_statistic, df=9, lower.tail = F)*2 # two-way
+t.test(sample-50) # Confirm it is the same as the t.test results
 
 ## SIDE: Color the area
 curve(dt((x-50)/{sd(sample)/sqrt(10)}, df=9),col="red", xlim=c(45, 55)) 
@@ -155,27 +159,25 @@ curve(dt(x, df=3), col="red", add=T)
 
 
 
-# Multiple testing ################################
+# Number of alpha errors
 x = runif(20000, 20, 80)
-head(x)
 hist(x)
 mean(x)
+MU = mean(x)
 SAMPLE=sample(x, 10)
 SAMPLE
-t.test(SAMPLE-50) # test whether this is significantly different from 0.05
-Tstat=t.test(SAMPLE-50)
+t.test(SAMPLE - MU) # test whether this is significantly different from 0.05
+Tstat=t.test(SAMPLE - MU)
 Tstat$p.value
-if(Tstat$p.value<0.05){sig=1}else{sig=0}
-sig
 
 # repeat the same test 10K times
 P=c()
 for (i in 1:10000){
   SAMPLE=sample(x, 10)
-  Tstat=t.test(SAMPLE-50)
+  Tstat=t.test(SAMPLE - MU)
   P = c(P, Tstat$p.value)
 }
-
+head(P, 10)
 hist(P)
 min(P)
 sum(P<0.05)
@@ -184,7 +186,7 @@ sum(P<0.05)
 # The deviation from expectation happens because 
 # CLT is not a normal dist. but an approx.
 
-# QQplot
+# QQplot is a good way to detect structural error
 ## From above example
 Psort=sort(P)
 Pexpc=(1:10000)/10000
@@ -203,10 +205,10 @@ Mchisq/qchisq(0.5,1)
 P=c()
 for (i in 1:10000){
   SAMPLE=sample(x, 400)
-  Tstat=t.test(SAMPLE-50)
+  Tstat=t.test(SAMPLE - MU)
   P = c(P, Tstat$p.value)
 }
-length(P[P<0.05])/length(P)
+sum(P<0.05)
 Psort=sort(P)
 plot(-log10(Pexpc), -log10(Psort))
 abline(0,1)
@@ -218,24 +220,36 @@ for (i in 1:10000){
   Tstat=t.test(SAMPLE-50)
   P2 = c(P2, Tstat$p.value)
 }
-length(P2[P2<0.05])/length(P2)
+sum(P2<0.05)
 P2sort=sort(P2)
 plot(-log10(Pexpc), -log10(P2sort))
 abline(0,1)
 
 
-
-# Bonferroni correction 0.05 / number of tests
+# Multiple testing correcion
+## Bonferroni correction 0.05 / number of tests
+P=c()
+for (i in 1:10000){
+  SAMPLE=sample(x, 10)
+  Tstat=t.test(SAMPLE - 46)
+  P = c(P, Tstat$p.value)
+}
 Psort=sort(P)
 df = data.frame(P=Psort)
 df$BONF_thre_to_rawP = 0.05/10000
 df$P_BONF = df$P*10000
 df$BONF_rjct = ifelse(df$P_BONF < 0.05, 1, 0)
 
+
 # False discovery rate of 0.05
 df$FDR_thre_to_rawP = 0.05/10000*(1:10000)
 df$P_FDR = df$P*10000/(1:10000)
 df$FDR_rjct = ifelse(df$P_FDR < 0.05, 1, 0) 
+
+
+
+
+
 
 
 
@@ -282,8 +296,8 @@ polygon(c(dots,rev(dots)),
 
 
 
-# Linear regression
-## give 3 scoops
+# Linear regression for original example
+## Y1s are scooped usign "A" scoop, and Y2s are scooped by "B" scoop.
 Y1=c(56, 49, 55, 56, 48, 52, 57, 42, 53, 58)
 Y2=c(45, 50, 53, 41, 51, 50, 45, 48)
 t.test(Y1, Y2)
@@ -301,19 +315,19 @@ plot(Y)
 abline(h=mean(Y))
 
 
-# The difference between Y1 and Y2 is using spoon A(==0) or spoon B(==1)
+# Give the information regarding spoon A(==0) and spoon B(==1)
 X1 = c(rep(0,10), rep(1, 8))
 # Add information of X1 in the model
 summary(lm(Y ~ 1 + X1))
 # Intercept is the mean of Y1
 mean(Y1)
-# X1 beta is the following;
+# beta for X1 is the same as the following;
 mean(Y2) - mean(Y1)
 # plot
 plot(X1,Y)
 abline(a=52.6, b=-4.725)
 
-# Further more, three people scooped alternatively
+# Further more, three people scooped in turns.
 # Person A == 0, Person B == 1, Person C == 2
 X2 = rep(c(0, 1, 2), 6) 
 summary(lm(Y ~ 1 + X1 + X2))
@@ -325,48 +339,39 @@ data.frame(X2, X2_1, X2_2)
 summary(lm(Y ~ 1 + X1 + X2_1 + X2_2))
 # The above is equivalent to 
 summary(lm(Y ~ 1 + X1 + as.factor(X2)))
-# Predict if person A uses spoon B
-56.27 - 3.81 * 1 + 0
+# Predict if person A uses spoon B...
 
 
 # Try add the age of the three people
 X3 = rep(c(25, 30, 35), 6)
 summary(lm(Y ~ 1 + X1 + as.factor(X2) + X3))
 
-# X3 is not adding any information == useless
-# add the minutes at scooping as new X3
-X3 = seq(0, 51, by = 3)
+
+# Give new value of X3 as the number of people in the shop
+set.seed(25)
+X3 = rpois(18, 4)
 summary(lm(Y ~ 1 + X1 + as.factor(X2) + X3))
 
 
 
 
-
-
-
-###################################################
-# 2nd half
-###################################################
+# Revisit the previous slide for permutation
 ## Pemutation test
-obs = data.frame(Y, X1, X2, X3)
-
-testOBS = lm(Y ~ X1 + X2 + X3, data = obs)
-testOBS
+obs = data.frame(Y, X1, X2)
+testOBS = lm(Y ~ X1 + as.factro(X2), data = obs)
+summary(testOBS)
 BETA1 = testOBS$coefficients[2]
 BETA1
 
 BETA_perm = c()
 for (i in 1:10000){
   obs$Yperm=sample(obs$Y)
-  testPERM = lm(Yperm ~ X1 + X2 + X3, data = obs)
+  testPERM = lm(Yperm ~ X1 + as.factor(X2), data = obs)
   BETA_perm = c(BETA_perm, testPERM$coefficients[2])
 }
 hist(BETA_perm, breaks=100)
 abline(v=c(BETA1, -BETA1))
 (sum(BETA_perm < -abs(BETA1), BETA_perm > abs(BETA1)) + 1) / 10001
-
-
-
 
 ## Multiple test adjustment for a permutation test
 X1 # consider this is a SNP
@@ -380,9 +385,10 @@ summary(lm(Y ~ X1c + as.factor(X2)))
 
 # get p-value
 P1 = summary(lm(Y ~ X1  + as.factor(X2)))$coefficient[2,4]
-P2 = summary(lm(Y ~ X1c + as.factor(X2)))$coefficient[2,4]
 P1
+P2 = summary(lm(Y ~ X1c + as.factor(X2)))$coefficient[2,4]
 P2
+
 # Permutation
 P1_PERM=c()
 P2_PERM=c()
@@ -393,7 +399,6 @@ for (i in 1:10000){
   P1_PERM=c(P1_PERM, min(P_m1, P_m2))
   P2_PERM=c(P2_PERM, max(P_m1, P_m2))
 }
-sort(P1_PERM)[1:10]
 (sum(P1_PERM < P1) + 1)/10001 # P1 adjusted
 (sum(P2_PERM < P2) + 1)/10001 # P2 adjusted
 ## BONF:P1=P2 = 0.05/2
@@ -404,6 +409,10 @@ sort(P1_PERM)[1:10]
 
 
 
+
+###################################################
+# 2nd half
+###################################################
 # PCA
 dPCA=subset(iris, Species!="setosa")
 head(dPCA)
@@ -425,12 +434,20 @@ head(PCA2$x)
 summary(PCA2)
 plot(-PCA2$x[,1], -PCA2$x[,2], col=dPCA$Species)
 plot(-PCA2$x[,1], -PCA2$x[,3], col=dPCA$Species)
+
+
+
+
+
+# Scree plot to decide number of components to use
 EV = PCA2$sdev^2 # eigen value. plink output a file for eigen values
 EV
 plot(EV, typ="o")
 summary(PCA2)$importance[2,]
 plot(summary(PCA2)$importance[2,], typ="o")
 
+
+# model using 4 or 2
 m_PC4 = glm(I(dPCA$Species=="virginica") ~ PCA2$x[,1] + PCA2$x[,2] + PCA2$x[,3] + PCA2$x[,4], family = binomial())
 m_PC2 = glm(I(dPCA$Species=="virginica") ~ PCA2$x[,1] + PCA2$x[,2], family = binomial())
 summary(m_PC4)
@@ -444,8 +461,8 @@ anova(m_PC2, m_PC4, test = "LRT")
 # Meta analysis
 ## We are intersted in the association of petal Width on sepal length 
 ## after adjusting for the petal length and the species.
-IRIS = iris # Load data
-# All analysis
+IRIS = iris # Load data this time use "setosa" species too.
+# One model analysis
 mAll  = lm(Sepal.Length ~ Petal.Width + Petal.Length + as.factor(Species), data = IRIS)
 # Stratified analysis
 mSeto = lm(Sepal.Length ~ Petal.Width + Petal.Length, data = subset(IRIS, Species=="setosa"))
@@ -476,13 +493,13 @@ abline(h=0)
 # Meta-analysis these results
 ### The sum of the products of weight x Beta devided by sum of the weights is
 ### a valid estimator of the overall effect.
-RES$W = c(0.1, 0.4, 0.5) # Weight can be anything
+RES$W = c(1/3, 1/3, 1/3) # Weight can be anything
 RES$WxB= RES$W * RES$Estimate 
-sum(RES$WxB)/sum(RES$W) # This is 
+sum(RES$WxB)/sum(RES$W)
 
-## This is valid but not efficient because it doesn't use the information
-## of how the beta is precise (SE)
-## Inverse variance method give the weight of inverse of variance
+## The above is valid but not efficient because it doesn't use the information
+## of how precise the betas are (SE)
+## Inverse variance method gives the weight of inverse of variance
 RES$W = 1 / (RES$Std..Error^2)
 RES$WxB= RES$W * RES$Estimate 
 meta_beta = sum(RES$WxB)/sum(RES$W) # This is the beta of meta-analysis
@@ -495,7 +512,15 @@ p_meta
 
 
 
+
+
+
 # Another example
+
+
+
+
+
 result = data.frame(
   strata=c("A", "B"),
   beta = c(-0.041, -0.136),
